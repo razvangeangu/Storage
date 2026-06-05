@@ -6,19 +6,21 @@ struct CategoryTreeView: View {
     let selectedItemIDs: Set<String>
     let onToggle: (StorageItem) -> Void
     let onSelectAllDeletable: (StorageCategory) -> Void
+    let onToggleCategorySelection: (StorageCategory) -> Void
 
     @State private var expandedCategoryIDs: Set<String> = []
 
     var body: some View {
         List {
             ForEach(categories) { category in
-                CategoryDisclosure(
+                CategorySection(
                     category: category,
                     totalBytes: totalBytes,
                     isExpanded: expansionBinding(for: category.id),
                     selectedItemIDs: selectedItemIDs,
                     onToggle: onToggle,
                     onSelectAllDeletable: onSelectAllDeletable,
+                    onToggleCategorySelection: onToggleCategorySelection,
                     expandedCategoryIDs: $expandedCategoryIDs
                 )
             }
@@ -57,15 +59,28 @@ struct CategoryTreeView: View {
     }
 }
 
-// MARK: - Category
+// MARK: - Layout metrics
 
-private struct CategoryDisclosure: View {
+private enum TreeMetrics {
+    static let rowHeight: CGFloat = 36
+    static let chevronWidth: CGFloat = 14
+    static let chevronSpacing: CGFloat = 8
+    static let checkboxWidth: CGFloat = 20
+    static let checkboxSpacing: CGFloat = 8
+    static let iconWidth: CGFloat = 28
+    static let childIndent: CGFloat = chevronWidth + chevronSpacing
+}
+
+// MARK: - Category section
+
+private struct CategorySection: View {
     let category: StorageCategory
     let totalBytes: Int64
     @Binding var isExpanded: Bool
     let selectedItemIDs: Set<String>
     let onToggle: (StorageItem) -> Void
     let onSelectAllDeletable: (StorageCategory) -> Void
+    let onToggleCategorySelection: (StorageCategory) -> Void
     @Binding var expandedCategoryIDs: Set<String>
 
     private var style: CategoryStyle.Appearance {
@@ -77,34 +92,45 @@ private struct CategoryDisclosure: View {
     }
 
     var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            if !category.subcategories.isEmpty {
-                ForEach(category.subcategories) { sub in
-                    SubcategoryDisclosure(
-                        category: sub,
-                        totalBytes: totalBytes,
-                        isExpanded: subExpansionBinding(for: sub.id),
-                        selectedItemIDs: selectedItemIDs,
-                        onToggle: onToggle,
-                        onSelectAllDeletable: onSelectAllDeletable
-                    )
-                }
-            } else {
-                ForEach(category.children) { item in
-                    ItemRow(item: item, isSelected: selectedItemIDs.contains(item.id), onToggle: onToggle)
-                }
-            }
-        } label: {
-            CategoryLabel(
+        VStack(alignment: .leading, spacing: 0) {
+            CategoryHeaderRow(
+                isExpanded: $isExpanded,
                 name: category.name,
                 style: style,
                 size: category.size,
                 totalBytes: totalBytes,
                 itemCount: itemCount,
                 isPartial: category.isPartial,
+                selectionState: selectionState(for: category),
+                onToggleSelection: { onToggleCategorySelection(category) },
                 onSelectAll: { onSelectAllDeletable(category) }
             )
+
+            if isExpanded {
+                if !category.subcategories.isEmpty {
+                    ForEach(category.subcategories) { sub in
+                        SubcategorySection(
+                            category: sub,
+                            totalBytes: totalBytes,
+                            isExpanded: subExpansionBinding(for: sub.id),
+                            selectedItemIDs: selectedItemIDs,
+                            onToggle: onToggle,
+                            onSelectAllDeletable: onSelectAllDeletable,
+                            onToggleCategorySelection: onToggleCategorySelection
+                        )
+                    }
+                } else {
+                    ForEach(category.children) { item in
+                        ItemRow(
+                            item: item,
+                            isSelected: selectedItemIDs.contains(item.id),
+                            onToggle: onToggle
+                        )
+                    }
+                }
+            }
         }
+        .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))
     }
 
     private func subExpansionBinding(for id: String) -> Binding<Bool> {
@@ -119,30 +145,36 @@ private struct CategoryDisclosure: View {
             }
         )
     }
+
+    private func selectionState(for category: StorageCategory) -> CheckboxState {
+        let deletable = category.allItems.filter(\.isDeletable)
+        guard !deletable.isEmpty else { return .unavailable }
+        let selected = deletable.filter { selectedItemIDs.contains($0.id) }.count
+        if selected == 0 { return .off }
+        if selected == deletable.count { return .on }
+        return .mixed
+    }
 }
 
 // MARK: - Subcategory
 
-private struct SubcategoryDisclosure: View {
+private struct SubcategorySection: View {
     let category: StorageCategory
     let totalBytes: Int64
     @Binding var isExpanded: Bool
     let selectedItemIDs: Set<String>
     let onToggle: (StorageItem) -> Void
     let onSelectAllDeletable: (StorageCategory) -> Void
+    let onToggleCategorySelection: (StorageCategory) -> Void
 
     private var style: CategoryStyle.Appearance {
         CategoryStyle.appearance(for: category.id)
     }
 
     var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            ForEach(category.children) { item in
-                ItemRow(item: item, isSelected: selectedItemIDs.contains(item.id), onToggle: onToggle)
-                    .padding(.leading, 4)
-            }
-        } label: {
-            CategoryLabel(
+        VStack(alignment: .leading, spacing: 0) {
+            CategoryHeaderRow(
+                isExpanded: $isExpanded,
                 name: category.name,
                 style: style,
                 size: category.size,
@@ -150,16 +182,39 @@ private struct SubcategoryDisclosure: View {
                 itemCount: category.children.count,
                 isPartial: category.isPartial,
                 compact: true,
+                leadingIndent: TreeMetrics.childIndent,
+                selectionState: selectionState(for: category),
+                onToggleSelection: { onToggleCategorySelection(category) },
                 onSelectAll: { onSelectAllDeletable(category) }
             )
+
+            if isExpanded {
+                ForEach(category.children) { item in
+                    ItemRow(
+                        item: item,
+                        isSelected: selectedItemIDs.contains(item.id),
+                        onToggle: onToggle,
+                        leadingIndent: TreeMetrics.childIndent
+                    )
+                }
+            }
         }
-        .padding(.leading, 8)
+    }
+
+    private func selectionState(for category: StorageCategory) -> CheckboxState {
+        let deletable = category.allItems.filter(\.isDeletable)
+        guard !deletable.isEmpty else { return .unavailable }
+        let selected = deletable.filter { selectedItemIDs.contains($0.id) }.count
+        if selected == 0 { return .off }
+        if selected == deletable.count { return .on }
+        return .mixed
     }
 }
 
-// MARK: - Shared label
+// MARK: - Category header
 
-private struct CategoryLabel: View {
+private struct CategoryHeaderRow: View {
+    @Binding var isExpanded: Bool
     let name: String
     let style: CategoryStyle.Appearance
     let size: Int64
@@ -167,6 +222,9 @@ private struct CategoryLabel: View {
     let itemCount: Int
     let isPartial: Bool
     var compact: Bool = false
+    var leadingIndent: CGFloat = 0
+    let selectionState: CheckboxState
+    let onToggleSelection: () -> Void
     let onSelectAll: () -> Void
 
     private var share: Double {
@@ -175,8 +233,30 @@ private struct CategoryLabel: View {
     }
 
     var body: some View {
-        HStack(spacing: compact ? 8 : 12) {
+        HStack(spacing: TreeMetrics.chevronSpacing) {
+            if leadingIndent > 0 {
+                Spacer().frame(width: leadingIndent)
+            }
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: TreeMetrics.chevronWidth, height: TreeMetrics.chevronWidth)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+            }
+            .buttonStyle(.plain)
+            .frame(width: TreeMetrics.chevronWidth, height: TreeMetrics.rowHeight)
+
+            SelectionCheckbox(state: selectionState, action: onToggleSelection)
+                .frame(width: TreeMetrics.checkboxWidth, height: TreeMetrics.rowHeight)
+
             CategoryIconBadge(icon: style.icon, color: style.color, compact: compact)
+                .frame(width: TreeMetrics.iconWidth, height: TreeMetrics.rowHeight)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -215,9 +295,11 @@ private struct CategoryLabel: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
         }
-        .padding(.vertical, compact ? 2 : 4)
+        .frame(minHeight: TreeMetrics.rowHeight)
     }
 }
+
+// MARK: - Shared views
 
 private struct CategoryIconBadge: View {
     let icon: String
@@ -228,9 +310,46 @@ private struct CategoryIconBadge: View {
         Image(systemName: icon)
             .font(compact ? .caption.weight(.semibold) : .body.weight(.semibold))
             .foregroundStyle(color)
-            .frame(width: compact ? 24 : 32, height: compact ? 24 : 32)
+            .frame(width: compact ? 24 : 28, height: compact ? 24 : 28)
             .background(color.opacity(0.14))
             .clipShape(RoundedRectangle(cornerRadius: compact ? 6 : 8, style: .continuous))
+    }
+}
+
+private enum CheckboxState {
+    case unavailable
+    case off
+    case mixed
+    case on
+}
+
+private struct SelectionCheckbox: View {
+    let state: CheckboxState
+    let action: () -> Void
+
+    var body: some View {
+        Group {
+            switch state {
+            case .unavailable:
+                Color.clear
+            case .off:
+                checkboxButton(symbol: "square")
+            case .mixed:
+                checkboxButton(symbol: "minus.square.fill")
+            case .on:
+                checkboxButton(symbol: "checkmark.square.fill")
+            }
+        }
+        .frame(width: TreeMetrics.checkboxWidth, height: TreeMetrics.checkboxWidth)
+    }
+
+    private func checkboxButton(symbol: String) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.body)
+                .foregroundStyle(state == .on || state == .mixed ? Color.accentColor : .secondary)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -240,19 +359,40 @@ private struct ItemRow: View {
     let item: StorageItem
     let isSelected: Bool
     let onToggle: (StorageItem) -> Void
+    var leadingIndent: CGFloat = 0
 
     private var appearance: CategoryStyle.ItemAppearance {
         CategoryStyle.itemAppearance(for: item)
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            selectionControl
+        HStack(spacing: TreeMetrics.checkboxSpacing) {
+            if leadingIndent > 0 {
+                Spacer().frame(width: leadingIndent)
+            }
+
+            Spacer().frame(width: TreeMetrics.chevronWidth)
+
+            if item.isDeletable {
+                SelectionCheckbox(
+                    state: isSelected ? .on : .off,
+                    action: { onToggle(item) }
+                )
+            } else if item.isLocked {
+                Image(systemName: "lock.fill")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .frame(width: TreeMetrics.checkboxWidth, height: TreeMetrics.checkboxWidth)
+                    .help("System-owned — cannot delete without admin")
+            } else {
+                Color.clear
+                    .frame(width: TreeMetrics.checkboxWidth, height: TreeMetrics.checkboxWidth)
+            }
 
             Image(systemName: appearance.icon)
                 .font(.body)
                 .foregroundStyle(appearance.color)
-                .frame(width: 22)
+                .frame(width: TreeMetrics.iconWidth, height: TreeMetrics.iconWidth)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.name)
@@ -275,32 +415,12 @@ private struct ItemRow: View {
                 .background(Color.primary.opacity(0.05))
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
-        .padding(.vertical, 4)
+        .frame(minHeight: TreeMetrics.rowHeight)
         .contentShape(Rectangle())
         .onTapGesture {
-            if item.isDeletable { onToggle(item) }
-        }
-    }
-
-    @ViewBuilder
-    private var selectionControl: some View {
-        if item.isDeletable {
-            Toggle(isOn: Binding(
-                get: { isSelected },
-                set: { _ in onToggle(item) }
-            )) {
-                EmptyView()
+            if item.isDeletable {
+                onToggle(item)
             }
-            .toggleStyle(.checkbox)
-            .labelsHidden()
-        } else if item.isLocked {
-            Image(systemName: "lock.fill")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .frame(width: 18)
-                .help("System-owned — cannot delete without admin")
-        } else {
-            Color.clear.frame(width: 18)
         }
     }
 }

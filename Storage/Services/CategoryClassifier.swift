@@ -13,13 +13,18 @@ enum CategoryClassifier {
             "/Applications/", homePrefix("Applications/"),
         ]),
         Rule(categoryID: "documents", name: "Documents", icon: "doc.fill", pathPrefixes: [
-            homePrefix("Documents/"), homePrefix("Desktop/"), homePrefix("Downloads/"),
+            homePrefix("Documents/"),
+            homePrefix("Desktop/"),
+            homePrefix("Downloads/"),
+            homePrefix("Library/Mobile Documents/"),
         ]),
         Rule(categoryID: "photos", name: "Photos", icon: "photo.fill", pathPrefixes: [
             homePrefix("Pictures/"),
         ]),
         Rule(categoryID: "developer", name: "Developer", icon: "hammer.fill", pathPrefixes: [
-            homePrefix("Developer/"), homePrefix("Library/Developer/"),
+            homePrefix("Developer/"),
+            homePrefix("Library/Developer/"),
+            homePrefix("Library/Caches/com.apple.dt.Xcode/"),
         ]),
         Rule(categoryID: "ios_backups", name: "iOS Backups", icon: "iphone", pathPrefixes: [
             homePrefix("Library/Application Support/MobileSync/"),

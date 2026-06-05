@@ -101,6 +101,22 @@ final class StorageViewModel {
         }
     }
 
+    func toggleCategorySelection(for category: StorageCategory) {
+        let deletable = category.allItems.filter(\.isDeletable)
+        guard !deletable.isEmpty else { return }
+
+        let allSelected = deletable.allSatisfy { selectedItemIDs.contains($0.id) }
+        if allSelected {
+            for item in deletable {
+                selectedItemIDs.remove(item.id)
+            }
+        } else {
+            for item in deletable {
+                selectedItemIDs.insert(item.id)
+            }
+        }
+    }
+
     func clearSelection() {
         selectedItemIDs.removeAll()
     }
@@ -124,8 +140,12 @@ final class StorageViewModel {
     }
 
     func openFullDiskAccessSettings() {
-        guard let url = PermissionService.fullDiskAccessSettingsURL else { return }
-        NSWorkspace.shared.open(url)
+        PermissionService.registerForFullDiskAccess()
+        for url in PermissionService.fullDiskAccessSettingsURLs() {
+            if NSWorkspace.shared.open(url) {
+                return
+            }
+        }
     }
 
     private static func formatDate(_ date: Date) -> String {

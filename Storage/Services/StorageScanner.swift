@@ -29,7 +29,9 @@ actor StorageScanner {
         var itemsByCategory: [String: [StorageItem]] = [:]
         var seenPaths: Set<String> = []
         var directoriesVisited = 0
-        let totalRoots = roots.count + 1
+        let dedicatedPasses = 3
+        let totalRoots = roots.count + dedicatedPasses
+        var passIndex = 0
 
         continuation.yield(.scanning(path: "/Applications", fraction: 0))
         await collectApplicationBundles(
@@ -37,11 +39,28 @@ actor StorageScanner {
             seenPaths: &seenPaths,
             continuation: continuation
         )
+        passIndex += 1
+
+        continuation.yield(.scanning(path: "Documents", fraction: Double(passIndex) / Double(totalRoots)))
+        await collectCategoryDirectoryEntries(
+            roots: KnownPaths.documentDirectoryRoots,
+            into: &itemsByCategory,
+            seenPaths: &seenPaths
+        )
+        passIndex += 1
+
+        continuation.yield(.scanning(path: "Developer", fraction: Double(passIndex) / Double(totalRoots)))
+        await collectCategoryDirectoryEntries(
+            roots: KnownPaths.developerDirectoryRoots,
+            into: &itemsByCategory,
+            seenPaths: &seenPaths
+        )
+        passIndex += 1
 
         for (index, root) in roots.enumerated() {
             if cancelled { return }
 
-            let fraction = Double(index + 1) / Double(totalRoots)
+            let fraction = Double(passIndex + index) / Double(totalRoots)
             continuation.yield(.scanning(path: root.path, fraction: fraction))
 
             await collectItems(
@@ -62,6 +81,17 @@ actor StorageScanner {
 
         var categories = buildCategories(from: itemsByCategory, isPartial: !hasFullDiskAccess)
         nestSystemData(into: &categories)
+        nestGroupedCategory(
+            parentID: "documents",
+            roots: KnownPaths.documentDirectoryRoots,
+            into: &categories
+        )
+        nestGroupedCategory(
+            parentID: "developer",
+            roots: KnownPaths.developerDirectoryRoots,
+            into: &categories
+        )
+        ensureWellKnownCategories(into: &categories)
 
         let accounted = categories.reduce(Int64(0)) { $0 + $1.size }
         let hidden = max(0, disk.usedBytes - accounted)
@@ -110,6 +140,44 @@ actor StorageScanner {
                 if cancelled { return }
                 let size = PathSizer.size(at: bundle)
                 addItem(url: bundle, size: size, seenPaths: &seenPaths, into: &itemsByCategory)
+            }
+        }
+    }
+
+    private func collectCategoryDirectoryEntries(
+        roots: [KnownPaths.CategoryRoot],
+        into itemsByCategory: inout [String: [StorageItem]],
+        seenPaths: inout Set<String>
+    ) async {
+        let fm = FileManager.default
+
+        for root in roots {
+            if cancelled { return }
+
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: root.url.path, isDirectory: &isDir) else { continue }
+
+            if isDir.boolValue {
+                guard let contents = try? fm.contentsOfDirectory(
+                    at: root.url,
+                    includingPropertiesForKeys: [.isDirectoryKey],
+                    options: [.skipsHiddenFiles]
+                ) else { continue }
+
+                if contents.isEmpty {
+                    let size = PathSizer.size(at: root.url)
+                    addItem(url: root.url, size: size, seenPaths: &seenPaths, into: &itemsByCategory)
+                    continue
+                }
+
+                for entry in contents {
+                    if cancelled { return }
+                    let size = PathSizer.size(at: entry)
+                    addItem(url: entry, size: size, seenPaths: &seenPaths, into: &itemsByCategory)
+                }
+            } else {
+                let size = PathSizer.size(at: root.url)
+                addItem(url: root.url, size: size, seenPaths: &seenPaths, into: &itemsByCategory)
             }
         }
     }
@@ -211,11 +279,18 @@ actor StorageScanner {
         }
         if url.pathExtension == "photoslibrary" { return true }
         if isApplicationSupportEntry(url) { return true }
+        if isDocumentOrDeveloperEntry(url) { return true }
         return false
     }
 
     private func isApplicationSupportEntry(_ url: URL) -> Bool {
         url.deletingLastPathComponent().path == KnownPaths.applicationSupportDirectory.path
+    }
+
+    private func isDocumentOrDeveloperEntry(_ url: URL) -> Bool {
+        let parent = url.deletingLastPathComponent().path
+        return KnownPaths.documentDirectoryRoots.contains { $0.url.path == parent }
+            || KnownPaths.developerDirectoryRoots.contains { $0.url.path == parent }
     }
 
     private func shouldRecurse(into url: URL, root: URL) -> Bool {
@@ -229,6 +304,10 @@ actor StorageScanner {
             if path == appRootPath || path.hasPrefix(appRootPath + "/") {
                 return false
             }
+        }
+
+        if KnownPaths.isUnderDocumentRoot(path: path) || KnownPaths.isUnderDeveloperRoot(path: path) {
+            return false
         }
 
         if path == KnownPaths.home.appendingPathComponent("Library").path {
@@ -250,7 +329,7 @@ actor StorageScanner {
         guard seenPaths.insert(path).inserted else { return }
         let meta = CategoryClassifier.category(for: path)
         let locked = CleanupService.isLocked(path: path)
-        let deletable = CleanupService.isWhitelisted(path: path) && CleanupService.isWritable(path: path)
+        let deletable = CleanupService.isUserDeletable(path: path)
 
         let item = StorageItem(
             id: path,
@@ -318,6 +397,70 @@ actor StorageScanner {
         )
 
         categories = remaining + [systemCategory]
+    }
+
+    private func nestGroupedCategory(
+        parentID: String,
+        roots: [KnownPaths.CategoryRoot],
+        into categories: inout [StorageCategory]
+    ) {
+        guard let index = categories.firstIndex(where: { $0.id == parentID }) else { return }
+
+        var parent = categories.remove(at: index)
+        var subcategories: [StorageCategory] = []
+        var groupedIDs = Set<String>()
+
+        for root in roots {
+            let prefix = root.url.path + "/"
+            let matching = parent.children.filter {
+                $0.path.hasPrefix(prefix) || $0.path == root.url.path
+            }
+            guard !matching.isEmpty else { continue }
+
+            groupedIDs.formUnion(matching.map(\.id))
+            let size = matching.reduce(Int64(0)) { $0 + $1.size }
+            subcategories.append(StorageCategory(
+                id: root.id,
+                name: root.name,
+                icon: root.icon,
+                size: size,
+                children: matching.sorted { $0.size > $1.size },
+                subcategories: [],
+                isPartial: parent.isPartial
+            ))
+        }
+
+        let ungrouped = parent.children.filter { !groupedIDs.contains($0.id) }
+        parent.children = ungrouped
+        parent.subcategories = subcategories.sorted { $0.size > $1.size }
+        parent.size = parent.children.reduce(Int64(0)) { $0 + $1.size }
+            + parent.subcategories.reduce(Int64(0)) { $0 + $1.size }
+
+        categories.append(parent)
+    }
+
+    private func ensureWellKnownCategories(into categories: inout [StorageCategory]) {
+        let fm = FileManager.default
+
+        let specs: [(id: String, name: String, icon: String, roots: [KnownPaths.CategoryRoot])] = [
+            ("documents", "Documents", "doc.fill", KnownPaths.documentDirectoryRoots),
+            ("developer", "Developer", "hammer.fill", KnownPaths.developerDirectoryRoots),
+        ]
+
+        for spec in specs {
+            guard !categories.contains(where: { $0.id == spec.id }) else { continue }
+            guard spec.roots.contains(where: { fm.fileExists(atPath: $0.url.path) }) else { continue }
+
+            categories.append(StorageCategory(
+                id: spec.id,
+                name: spec.name,
+                icon: spec.icon,
+                size: 0,
+                children: [],
+                subcategories: [],
+                isPartial: false
+            ))
+        }
     }
 
     private func fileSize(at url: URL) -> Int64 {

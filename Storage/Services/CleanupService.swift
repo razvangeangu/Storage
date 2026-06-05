@@ -8,16 +8,26 @@ struct CleanupResult: Sendable {
 
 enum CleanupService {
     nonisolated static func canDelete(item: StorageItem) -> Bool {
-        guard item.isDeletable, !item.isLocked else { return false }
-        return isWhitelisted(path: item.path) && isWritable(path: item.path)
+        isUserDeletable(path: item.path)
     }
 
-    nonisolated static func isWhitelisted(path: String) -> Bool {
+    nonisolated static func isUserDeletable(path: String) -> Bool {
+        guard isWritable(path: path), !isLocked(path: path) else { return false }
+
+        if KnownPaths.neverDeletableExactPaths.contains(path) {
+            return false
+        }
+
         let normalized = path.hasSuffix("/") ? path : path + "/"
         if KnownPaths.neverDeletablePrefixes.contains(where: { normalized.hasPrefix($0) || path == String($0.dropLast()) }) {
             return false
         }
+
         return KnownPaths.cleanupWhitelistPrefixes.contains { normalized.hasPrefix($0) }
+    }
+
+    nonisolated static func isWhitelisted(path: String) -> Bool {
+        isUserDeletable(path: path)
     }
 
     nonisolated static func isWritable(path: String) -> Bool {

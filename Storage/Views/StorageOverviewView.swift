@@ -60,7 +60,8 @@ struct StorageOverviewView: View {
                 totalBytes: result.totalBytes,
                 selectedItemIDs: viewModel.selectedItemIDs,
                 onToggle: { viewModel.toggleSelection(for: $0) },
-                onSelectAllDeletable: { viewModel.selectAllDeletable(in: $0) }
+                onSelectAllDeletable: { viewModel.selectAllDeletable(in: $0) },
+                onToggleCategorySelection: { viewModel.toggleCategorySelection(for: $0) }
             )
         } else if !viewModel.isScanning {
             ContentUnavailableView {
@@ -113,7 +114,7 @@ struct StorageOverviewView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Enable Full Disk Access for System Data")
                     .font(.subheadline.weight(.semibold))
-                Text("Privacy toggle only — not admin. Reveals caches, containers, and system folders.")
+                Text("Opens Privacy & Security and adds Storage to the list. Toggle it on, then Refresh.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
