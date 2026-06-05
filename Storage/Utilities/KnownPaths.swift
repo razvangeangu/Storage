@@ -9,10 +9,21 @@ enum KnownPaths {
         URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
     }
 
+    nonisolated static var applicationBundleRoots: [URL] {
+        [
+            URL(fileURLWithPath: "/Applications", isDirectory: true),
+            URL(fileURLWithPath: "/System/Applications", isDirectory: true),
+            home.appendingPathComponent("Applications", isDirectory: true),
+        ]
+    }
+
+    nonisolated static var applicationSupportDirectory: URL {
+        home.appendingPathComponent("Library/Application Support", isDirectory: true)
+    }
+
     nonisolated static func scanRoots(hasFullDiskAccess: Bool) -> [URL] {
         var roots: [URL] = [
             home,
-            URL(fileURLWithPath: "/Applications", isDirectory: true),
         ]
 
         if hasFullDiskAccess {

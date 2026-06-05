@@ -24,6 +24,10 @@ enum CategoryClassifier {
         Rule(categoryID: "ios_backups", name: "iOS Backups", icon: "iphone", pathPrefixes: [
             homePrefix("Library/Application Support/MobileSync/"),
         ]),
+        // macOS Settings counts per-app data in Application Support under Applications.
+        Rule(categoryID: "applications", name: "Applications", icon: "app.fill", pathPrefixes: [
+            homePrefix("Library/Application Support/"),
+        ]),
         Rule(categoryID: "mail", name: "Mail", icon: "envelope.fill", pathPrefixes: [
             homePrefix("Library/Mail/"),
         ]),
@@ -43,7 +47,6 @@ enum CategoryClassifier {
             homePrefix("Library/Containers/"), homePrefix("Library/Group Containers/"),
         ]),
         Rule(categoryID: "system_data", name: "System Data", icon: "gearshape.fill", pathPrefixes: [
-            homePrefix("Library/Application Support/"),
             "/private/var/folders/",
         ]),
         Rule(categoryID: "snapshots", name: "Time Machine Snapshots", icon: "clock.arrow.circlepath", pathPrefixes: [
@@ -58,6 +61,10 @@ enum CategoryClassifier {
     ]
 
     nonisolated static func category(for path: String) -> (id: String, name: String, icon: String) {
+        if path.hasSuffix(".app") || path.contains(".app/") {
+            return ("applications", "Applications", "app.fill")
+        }
+
         let normalized = path.hasSuffix("/") ? path : path + "/"
         for rule in rules {
             for prefix in rule.pathPrefixes {

@@ -27,18 +27,27 @@ actor StorageScanner {
 
         let roots = KnownPaths.scanRoots(hasFullDiskAccess: hasFullDiskAccess)
         var itemsByCategory: [String: [StorageItem]] = [:]
+        var seenPaths: Set<String> = []
         var directoriesVisited = 0
-        let totalRoots = roots.count
+        let totalRoots = roots.count + 1
+
+        continuation.yield(.scanning(path: "/Applications", fraction: 0))
+        await collectApplicationBundles(
+            into: &itemsByCategory,
+            seenPaths: &seenPaths,
+            continuation: continuation
+        )
 
         for (index, root) in roots.enumerated() {
             if cancelled { return }
 
-            let fraction = Double(index) / Double(totalRoots)
+            let fraction = Double(index + 1) / Double(totalRoots)
             continuation.yield(.scanning(path: root.path, fraction: fraction))
 
             await collectItems(
                 at: root,
                 into: &itemsByCategory,
+                seenPaths: &seenPaths,
                 directoriesVisited: &directoriesVisited,
                 continuation: continuation,
                 rootFraction: fraction,
@@ -88,9 +97,52 @@ actor StorageScanner {
         continuation.finish()
     }
 
+    private func collectApplicationBundles(
+        into itemsByCategory: inout [String: [StorageItem]],
+        seenPaths: inout Set<String>,
+        continuation: AsyncStream<ScanProgress>.Continuation
+    ) async {
+        for root in KnownPaths.applicationBundleRoots {
+            if cancelled { return }
+            continuation.yield(.scanning(path: root.path, fraction: 0.05))
+
+            for bundle in findAppBundles(in: root) {
+                if cancelled { return }
+                let size = PathSizer.size(at: bundle)
+                addItem(url: bundle, size: size, seenPaths: &seenPaths, into: &itemsByCategory)
+            }
+        }
+    }
+
+    private func findAppBundles(in root: URL) -> [URL] {
+        let fm = FileManager.default
+        var isDir: ObjCBool = false
+        guard fm.fileExists(atPath: root.path, isDirectory: &isDir), isDir.boolValue else {
+            return []
+        }
+
+        guard let enumerator = fm.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        var bundles: [URL] = []
+        for case let url as URL in enumerator {
+            if url.lastPathComponent.hasSuffix(".app") {
+                bundles.append(url)
+                enumerator.skipDescendants()
+            }
+        }
+        return bundles
+    }
+
     private func collectItems(
         at root: URL,
         into itemsByCategory: inout [String: [StorageItem]],
+        seenPaths: inout Set<String>,
         directoriesVisited: inout Int,
         continuation: AsyncStream<ScanProgress>.Continuation,
         rootFraction: Double,
@@ -102,8 +154,8 @@ actor StorageScanner {
 
         if isDir.boolValue {
             if shouldTreatAsLeaf(root) {
-                let size = directorySize(at: root)
-                addItem(url: root, size: size, into: &itemsByCategory)
+                let size = PathSizer.size(at: root)
+                addItem(url: root, size: size, seenPaths: &seenPaths, into: &itemsByCategory)
                 return
             }
 
@@ -125,12 +177,13 @@ actor StorageScanner {
 
                 if entryIsDir.boolValue {
                     if shouldTreatAsLeaf(entry) {
-                        let size = directorySize(at: entry)
-                        addItem(url: entry, size: size, into: &itemsByCategory)
+                        let size = PathSizer.size(at: entry)
+                        addItem(url: entry, size: size, seenPaths: &seenPaths, into: &itemsByCategory)
                     } else if shouldRecurse(into: entry, root: root) {
                         await collectItems(
                             at: entry,
                             into: &itemsByCategory,
+                            seenPaths: &seenPaths,
                             directoriesVisited: &directoriesVisited,
                             continuation: continuation,
                             rootFraction: rootFraction,
@@ -140,43 +193,61 @@ actor StorageScanner {
                 } else {
                     let size = fileSize(at: entry)
                     if size > 0 {
-                        addItem(url: entry, size: size, into: &itemsByCategory)
+                        addItem(url: entry, size: size, seenPaths: &seenPaths, into: &itemsByCategory)
                     }
                 }
             }
         } else {
             let size = fileSize(at: root)
-            addItem(url: root, size: size, into: &itemsByCategory)
+            addItem(url: root, size: size, seenPaths: &seenPaths, into: &itemsByCategory)
         }
     }
 
     private func shouldTreatAsLeaf(_ url: URL) -> Bool {
         let name = url.lastPathComponent
+        if name.hasSuffix(".app") { return true }
         if KnownPaths.packageSuffixes.contains(where: { name.hasSuffix($0) }) {
             return true
         }
         if url.pathExtension == "photoslibrary" { return true }
+        if isApplicationSupportEntry(url) { return true }
         return false
+    }
+
+    private func isApplicationSupportEntry(_ url: URL) -> Bool {
+        url.deletingLastPathComponent().path == KnownPaths.applicationSupportDirectory.path
     }
 
     private func shouldRecurse(into url: URL, root: URL) -> Bool {
         let path = url.path
         if path.contains("/dev/") || path.contains("/.git/") { return false }
         if url.lastPathComponent == "Volumes" { return false }
+        if url.lastPathComponent.hasSuffix(".app") { return false }
+
+        for appRoot in KnownPaths.applicationBundleRoots {
+            let appRootPath = appRoot.path
+            if path == appRootPath || path.hasPrefix(appRootPath + "/") {
+                return false
+            }
+        }
+
         if path == KnownPaths.home.appendingPathComponent("Library").path {
             return true
-        }
-        if path.hasPrefix("/Applications/") && url.pathExtension == "app" {
-            return false
         }
         let depth = path.split(separator: "/").count - root.path.split(separator: "/").count
         if depth > 6 { return false }
         return true
     }
 
-    private func addItem(url: URL, size: Int64, into itemsByCategory: inout [String: [StorageItem]]) {
+    private func addItem(
+        url: URL,
+        size: Int64,
+        seenPaths: inout Set<String>,
+        into itemsByCategory: inout [String: [StorageItem]]
+    ) {
         guard size > 0 else { return }
         let path = url.path
+        guard seenPaths.insert(path).inserted else { return }
         let meta = CategoryClassifier.category(for: path)
         let locked = CleanupService.isLocked(path: path)
         let deletable = CleanupService.isWhitelisted(path: path) && CleanupService.isWritable(path: path)
@@ -253,26 +324,4 @@ actor StorageScanner {
         (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
     }
 
-    private func directorySize(at url: URL) -> Int64 {
-        let fm = FileManager.default
-        guard let enumerator = fm.enumerator(
-            at: url,
-            includingPropertiesForKeys: [.fileSizeKey, .isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return 0
-        }
-
-        var total: Int64 = 0
-        var count = 0
-        for case let fileURL as URL in enumerator {
-            if cancelled { break }
-            count += 1
-            if count > 10_000 { break }
-            if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
-                total += Int64(size)
-            }
-        }
-        return total
-    }
 }
