@@ -7,10 +7,6 @@ struct StorageOverviewView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            if !viewModel.hasFullDiskAccess {
-                fdaBanner
-                Divider()
-            }
             content
                 .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
                 .layoutPriority(1)
@@ -110,75 +106,6 @@ struct StorageOverviewView: View {
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
-    }
-
-    private var fdaBanner: some View {
-        ViewThatFits(in: .horizontal) {
-            fdaBannerWide
-            fdaBannerCompact
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.orange.opacity(0.07))
-    }
-
-    private var fdaBannerWide: some View {
-        HStack(alignment: .top, spacing: 14) {
-            fdaBannerIcon
-            fdaBannerText
-            Spacer(minLength: 8)
-            fdaBannerButtons
-        }
-    }
-
-    private var fdaBannerCompact: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 14) {
-                fdaBannerIcon
-                fdaBannerText
-            }
-            fdaBannerButtons
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var fdaBannerIcon: some View {
-        Image(systemName: "lock.shield.fill")
-            .font(.title3)
-            .foregroundStyle(.white)
-            .frame(width: 36, height: 36)
-            .background(Color.orange.gradient)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-    }
-
-    private var fdaBannerText: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Enable Full Disk Access for System Data")
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(2)
-            Text("Install Storage in /Applications first. Open Settings, enable Storage, then run Scan for full System Data visibility.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var fdaBannerButtons: some View {
-        HStack(spacing: 8) {
-            Button("Open Settings") {
-                viewModel.openFullDiskAccessSettings()
-            }
-            .controlSize(.small)
-            Button("Check Access") {
-                viewModel.refreshPermissions()
-            }
-            .controlSize(.small)
-            .buttonStyle(.borderedProminent)
-            .tint(.orange)
-        }
-        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var footer: some View {

@@ -194,15 +194,26 @@ enum KnownPaths {
         return candidates.filter { fm.fileExists(atPath: $0.path) }
     }
 
-    nonisolated static func scanRoots(hasFullDiskAccess: Bool) -> [URL] {
-        var roots = libraryScanRoots
-        if hasFullDiskAccess {
-            roots.append(contentsOf: [
-                URL(fileURLWithPath: "/Library/Caches", isDirectory: true),
-                URL(fileURLWithPath: "/Library/Logs", isDirectory: true),
-            ])
+    nonisolated static var extendedSystemScanRoots: [URL] {
+        [
+            URL(fileURLWithPath: "/Library/Caches", isDirectory: true),
+            URL(fileURLWithPath: "/Library/Logs", isDirectory: true),
+        ]
+    }
+
+    nonisolated static var allScanRootCandidates: [URL] {
+        libraryScanRoots + extendedSystemScanRoots
+    }
+
+    /// Roots the app can read right now — skips macOS-protected folders instead of requiring Full Disk Access up front.
+    nonisolated static func accessibleScanRoots() -> [URL] {
+        allScanRootCandidates.filter { PermissionService.canAccess(path: $0.path) }
+    }
+
+    nonisolated static func inaccessibleScanRoots() -> [URL] {
+        allScanRootCandidates.filter {
+            FileManager.default.fileExists(atPath: $0.path) && !PermissionService.canAccess(path: $0.path)
         }
-        return roots
     }
 
     nonisolated static let cleanupWhitelistPrefixes: [String] = [

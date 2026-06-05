@@ -3,6 +3,8 @@ import Foundation
 enum FolderBrowserService {
     /// Lists immediate children of a folder with sizes (parallel `du`, shallow only).
     static func listContents(at url: URL) async -> [StorageItem] {
+        guard PermissionService.canAccess(path: url.path) else { return [] }
+
         let fm = FileManager.default
         var isDir: ObjCBool = false
         guard fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else {

@@ -21,23 +21,29 @@ struct SettingsView: View {
 
     private var permissionsSection: some View {
         Section {
-            LabeledContent("Full Disk Access") {
+            LabeledContent("Extended visibility") {
                 Label(
-                    viewModel.hasFullDiskAccess ? "Enabled" : "Not enabled",
-                    systemImage: viewModel.hasFullDiskAccess ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+                    viewModel.hasFullDiskAccess ? "On" : "Off",
+                    systemImage: viewModel.hasFullDiskAccess ? "checkmark.circle.fill" : "minus.circle.fill"
                 )
-                .foregroundStyle(viewModel.hasFullDiskAccess ? .green : .orange)
+                .foregroundStyle(viewModel.hasFullDiskAccess ? .green : .secondary)
+            }
+
+            if !viewModel.hasFullDiskAccess {
+                Text("Storage scans your home folder, apps, caches, and developer tools without this. Extended visibility only adds macOS-protected areas such as Mail and Messages.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Button("Open Full Disk Access Settings…") {
                 viewModel.openFullDiskAccessSettings()
             }
 
-            Text("Keep Storage in /Applications so macOS recognizes the same app when you toggle access. Run Scan after enabling for full visibility.")
+            Text("Optional — does not require an administrator password on a personal Mac. Some work or school Macs block this setting; the app still works without it.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         } header: {
-            Text("Permissions")
+            Text("Optional visibility")
         }
     }
 
@@ -65,7 +71,7 @@ struct SettingsView: View {
         } header: {
             Text("Scan")
         } footer: {
-            Text("Clear the cache after upgrading Storage or changing Full Disk Access, then run Scan. Outdated caches are ignored automatically.")
+            Text("Clear the cache after upgrading Storage, then run Scan. Outdated caches are ignored automatically.")
         }
     }
 

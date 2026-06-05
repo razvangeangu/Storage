@@ -15,7 +15,7 @@ struct ReadyToScanView: View {
                     Text("See what's using space")
                         .font(.title2.weight(.semibold))
                         .multilineTextAlignment(.center)
-                    Text("Scan your Mac to get a breakdown by category — Applications, Documents, Developer tools, and more.")
+                    Text("Scan your Mac to get a breakdown by category — Applications, Documents, Developer tools, and more. No administrator access required.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

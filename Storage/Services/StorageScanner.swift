@@ -7,16 +7,20 @@ actor StorageScanner {
         cancelled = true
     }
 
-    func scan(hasFullDiskAccess: Bool) -> AsyncStream<ScanProgress> {
+    func scan() -> AsyncStream<ScanProgress> {
         cancelled = false
         return AsyncStream { continuation in
             Task {
-                await self.runScan(hasFullDiskAccess: hasFullDiskAccess, continuation: continuation)
+                await self.runScan(continuation: continuation)
             }
         }
     }
 
-    private func runScan(hasFullDiskAccess: Bool, continuation: AsyncStream<ScanProgress>.Continuation) async {
+    private func runScan(continuation: AsyncStream<ScanProgress>.Continuation) async {
+        let hasFullDiskAccess = PermissionService.hasFullDiskAccess()
+        let partialCategoryIDs = Self.partialCategoryIDs(
+            from: KnownPaths.inaccessibleScanRoots()
+        )
         continuation.yield(.started)
 
         guard let disk = DiskSpaceService.bootVolumeInfo() else {
@@ -25,7 +29,7 @@ actor StorageScanner {
             return
         }
 
-        let plan = await buildScanPlan(hasFullDiskAccess: hasFullDiskAccess)
+        let plan = await buildScanPlan()
         if cancelled {
             continuation.finish()
             return
@@ -48,7 +52,7 @@ actor StorageScanner {
             return
         }
 
-        var categories = buildCategories(from: itemsByCategory, isPartial: !hasFullDiskAccess)
+        var categories = buildCategories(from: itemsByCategory, partialCategoryIDs: partialCategoryIDs)
         nestSystemData(into: &categories)
         nestGroupedCategory(
             parentID: "documents",
@@ -65,11 +69,11 @@ actor StorageScanner {
         let accounted = categories.reduce(Int64(0)) { $0 + $1.size }
         let hidden = max(0, disk.usedBytes - accounted)
 
-        if !hasFullDiskAccess, hidden > 0 {
+        if hidden > 0 {
             categories.append(StorageCategory(
                 id: "hidden",
-                name: "Other / System (scan with Full Disk Access)",
-                icon: "questionmark.folder.fill",
+                name: "Other & system",
+                icon: "externaldrive.fill.badge.questionmark",
                 size: hidden,
                 children: [],
                 subcategories: [],
@@ -102,14 +106,14 @@ actor StorageScanner {
         let entries: [URL]
     }
 
-    private func buildScanPlan(hasFullDiskAccess: Bool) async -> ScanPlan {
+    private func buildScanPlan() async -> ScanPlan {
         async let appBundles = findAllAppBundles()
         async let documentEntries = listEntries(
             for: KnownPaths.documentDirectoryRoots,
             includeHiddenEntries: false
         )
         async let developerEntries = listDeveloperEntries()
-        async let libraryEntries = listLibraryEntries(hasFullDiskAccess: hasFullDiskAccess)
+        async let libraryEntries = listLibraryEntries()
 
         var uniquePaths = Set<String>()
         var entries: [URL] = []
@@ -149,8 +153,12 @@ actor StorageScanner {
     }
 
     private func findAllAppBundles() async -> [URL] {
-        await withTaskGroup(of: [URL].self) { group in
-            for root in KnownPaths.applicationBundleRoots {
+        let roots = KnownPaths.applicationBundleRoots.filter {
+            PermissionService.canAccess(path: $0.path)
+        }
+        guard !roots.isEmpty else { return [] }
+        return await withTaskGroup(of: [URL].self) { group in
+            for root in roots {
                 group.addTask(priority: .utility) {
                     Self.findAppBundles(in: root)
                 }
@@ -180,8 +188,10 @@ actor StorageScanner {
         for roots: [KnownPaths.CategoryRoot],
         includeHiddenEntries: Bool
     ) async -> [URL] {
-        await withTaskGroup(of: [URL].self) { group in
-            for root in roots {
+        let accessibleRoots = roots.filter { PermissionService.canAccess(path: $0.url.path) }
+        guard !accessibleRoots.isEmpty else { return [] }
+        return await withTaskGroup(of: [URL].self) { group in
+            for root in accessibleRoots {
                 group.addTask(priority: .utility) {
                     Self.plannedEntries(at: root.url, includeHiddenEntries: includeHiddenEntries)
                 }
@@ -195,8 +205,8 @@ actor StorageScanner {
         }
     }
 
-    private func listLibraryEntries(hasFullDiskAccess: Bool) async -> [URL] {
-        let roots = KnownPaths.scanRoots(hasFullDiskAccess: hasFullDiskAccess)
+    private func listLibraryEntries() async -> [URL] {
+        let roots = KnownPaths.accessibleScanRoots()
         return await withTaskGroup(of: [URL].self) { group in
             for root in roots {
                 group.addTask(priority: .utility) {
@@ -326,7 +336,10 @@ actor StorageScanner {
         itemsByCategory[meta.id, default: []].append(item)
     }
 
-    private func buildCategories(from itemsByCategory: [String: [StorageItem]], isPartial: Bool) -> [StorageCategory] {
+    private func buildCategories(
+        from itemsByCategory: [String: [StorageItem]],
+        partialCategoryIDs: Set<String>
+    ) -> [StorageCategory] {
         var categories: [StorageCategory] = []
 
         for (categoryID, items) in itemsByCategory {
@@ -342,11 +355,20 @@ actor StorageScanner {
                 size: total,
                 children: sorted,
                 subcategories: [],
-                isPartial: isPartial && ["system_data", "caches", "logs", "containers"].contains(categoryID)
+                isPartial: partialCategoryIDs.contains(categoryID)
             ))
         }
 
         return categories
+    }
+
+    private nonisolated static func partialCategoryIDs(from inaccessibleRoots: [URL]) -> Set<String> {
+        var ids = Set<String>()
+        for root in inaccessibleRoots {
+            let meta = CategoryClassifier.category(for: root.path)
+            ids.insert(meta.id)
+        }
+        return ids
     }
 
     private func nestSystemData(into categories: inout [StorageCategory]) {

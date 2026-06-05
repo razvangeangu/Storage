@@ -100,8 +100,7 @@ final class StorageViewModel {
     func onAppear() {
         hasFullDiskAccess = PermissionService.hasFullDiskAccess()
         if AppSettings.showCachedResultsOnLaunch,
-           let cached = ScanCacheStore.load(),
-           cached.hasFullDiskAccess == hasFullDiskAccess {
+           let cached = ScanCacheStore.load() {
             scanResult = cached
             scanStatusText = "Last scanned \(Self.formatDate(cached.scannedAt))"
             bootstrapBrowser(for: cached)
@@ -141,7 +140,7 @@ final class StorageViewModel {
             resetBrowser()
             hasFullDiskAccess = PermissionService.hasFullDiskAccess()
 
-            let stream = await scanner.scan(hasFullDiskAccess: hasFullDiskAccess)
+            let stream = await scanner.scan()
             for await progress in stream {
                 applyScanProgress(progress)
             }
@@ -371,7 +370,6 @@ final class StorageViewModel {
     }
 
     func openFullDiskAccessSettings() {
-        PermissionService.registerForFullDiskAccess()
         for url in PermissionService.fullDiskAccessSettingsURLs() {
             if NSWorkspace.shared.open(url) {
                 return
