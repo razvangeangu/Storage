@@ -2,13 +2,23 @@ import SwiftUI
 
 @main
 struct StorageApp: App {
+    @State private var viewModel = StorageViewModel()
+
     var body: some Scene {
         WindowGroup {
-            StorageOverviewView()
+            StorageOverviewView(viewModel: viewModel)
         }
-        .defaultSize(width: 960, height: 640)
+        .defaultSize(
+            width: WindowMetrics.defaultWidth,
+            height: WindowMetrics.defaultHeight
+        )
+        .windowResizability(.contentSize)
         .commands {
             CommandGroup(replacing: .newItem) {}
+        }
+
+        Settings {
+            SettingsView(viewModel: viewModel)
         }
     }
 }

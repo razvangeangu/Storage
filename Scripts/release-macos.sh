@@ -4,8 +4,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 VERSION="${1:?Usage: ./Scripts/release-macos.sh VERSION}"
+VERSION="${VERSION#v}"
 APP="$ROOT/build/Release/Storage.app"
 ZIP="$ROOT/build/storage-macos-v${VERSION}.zip"
+
+echo "$VERSION" > "$ROOT/VERSION"
+echo "Setting app version to ${VERSION}…"
+xcrun agvtool new-marketing-version "$VERSION" >/dev/null
+xcrun agvtool new-version -all "$VERSION" >/dev/null
 
 echo "Building Storage (Release, universal)…"
 xcodebuild -scheme Storage -configuration Release \

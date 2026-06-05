@@ -14,6 +14,10 @@ enum CleanupService {
     nonisolated static func isUserDeletable(path: String) -> Bool {
         guard isWritable(path: path), !isLocked(path: path) else { return false }
 
+        if DeletionRiskService.isSystemProtected(path: path) {
+            return false
+        }
+
         if KnownPaths.neverDeletableExactPaths.contains(path) {
             return false
         }

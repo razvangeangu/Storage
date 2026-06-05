@@ -24,6 +24,7 @@ struct CategoryTreeView: View {
             }
         }
         .listStyle(.inset(alternatesRowBackgrounds: true))
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button("Expand All") { expandAll() }
@@ -254,6 +255,8 @@ private struct CategoryHeaderRow: View {
                 HStack(spacing: 6) {
                     Text(name)
                         .font(compact ? .subheadline.weight(.medium) : .body.weight(.semibold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                     if isPartial {
                         Text("Partial")
                             .font(.caption2.weight(.medium))
@@ -262,22 +265,27 @@ private struct CategoryHeaderRow: View {
                             .background(Color.orange.opacity(0.15))
                             .foregroundStyle(.orange)
                             .clipShape(Capsule())
+                            .fixedSize()
                     }
                 }
                 if itemCount > 0 {
                     Text("\(itemCount) items · \(Int(share * 100))% of disk")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
-
-            Spacer()
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
 
             Text(ByteFormatting.string(for: size))
                 .font(compact ? .caption.monospacedDigit().weight(.medium) : .subheadline.monospacedDigit().weight(.semibold))
                 .foregroundStyle(style.color)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(2)
         }
-        .frame(minHeight: TreeMetrics.rowHeight)
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: TreeMetrics.rowHeight, alignment: .leading)
     }
 }
 
@@ -377,24 +385,28 @@ private struct ItemRow: View {
                 Text(item.name)
                     .font(.body)
                     .lineLimit(1)
+                    .truncationMode(.middle)
                 Text(item.path)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-
-            Spacer()
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
 
             Text(ByteFormatting.string(for: item.size))
                 .font(.subheadline.monospacedDigit())
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background(Color.primary.opacity(0.05))
                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(2)
         }
-        .frame(minHeight: TreeMetrics.rowHeight)
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: TreeMetrics.rowHeight, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture {
             if !item.isLocked {

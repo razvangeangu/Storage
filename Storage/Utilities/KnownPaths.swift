@@ -174,24 +174,41 @@ enum KnownPaths {
         }
     }
 
-    nonisolated static func scanRoots(hasFullDiskAccess: Bool) -> [URL] {
-        var roots: [URL] = [
-            home,
+    /// Shallow library and media folders — avoids walking the entire home directory tree.
+    nonisolated static var libraryScanRoots: [URL] {
+        let library = home.appendingPathComponent("Library", isDirectory: true)
+        let candidates = [
+            library.appendingPathComponent("Application Support", isDirectory: true),
+            library.appendingPathComponent("Caches", isDirectory: true),
+            library.appendingPathComponent("Containers", isDirectory: true),
+            library.appendingPathComponent("Group Containers", isDirectory: true),
+            library.appendingPathComponent("Mail", isDirectory: true),
+            library.appendingPathComponent("Messages", isDirectory: true),
+            library.appendingPathComponent("Logs", isDirectory: true),
+            home.appendingPathComponent("Movies", isDirectory: true),
+            home.appendingPathComponent("Music", isDirectory: true),
+            home.appendingPathComponent("Pictures", isDirectory: true),
+            home.appendingPathComponent(".Trash", isDirectory: true),
         ]
+        let fm = FileManager.default
+        return candidates.filter { fm.fileExists(atPath: $0.path) }
+    }
 
+    nonisolated static func scanRoots(hasFullDiskAccess: Bool) -> [URL] {
+        var roots = libraryScanRoots
         if hasFullDiskAccess {
             roots.append(contentsOf: [
                 URL(fileURLWithPath: "/Library/Caches", isDirectory: true),
                 URL(fileURLWithPath: "/Library/Logs", isDirectory: true),
             ])
         }
-
         return roots
     }
 
     nonisolated static let cleanupWhitelistPrefixes: [String] = [
         home.appendingPathComponent("Library/Caches").path + "/",
         home.appendingPathComponent("Library/Logs").path + "/",
+        home.appendingPathComponent("Library/Containers").path + "/",
         home.appendingPathComponent("Library/Application Support").path + "/",
         home.appendingPathComponent(".Trash").path + "/",
         home.appendingPathComponent("Downloads").path + "/",

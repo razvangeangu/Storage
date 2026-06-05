@@ -15,7 +15,7 @@ struct ScanResult: Codable, Sendable {
 
 enum ScanProgress: Sendable {
     case started
-    case scanning(path: String, fraction: Double)
+    case scanning(path: String, fraction: Double, itemsChecked: Int)
     case completed(ScanResult)
     case failed(String)
 }
