@@ -52,6 +52,7 @@ actor StorageScanner {
         continuation.yield(.scanning(path: "Developer", fraction: Double(passIndex) / Double(totalRoots)))
         await collectCategoryDirectoryEntries(
             roots: KnownPaths.developerDirectoryRoots,
+            includeHiddenEntries: true,
             into: &itemsByCategory,
             seenPaths: &seenPaths
         )
@@ -146,10 +147,12 @@ actor StorageScanner {
 
     private func collectCategoryDirectoryEntries(
         roots: [KnownPaths.CategoryRoot],
+        includeHiddenEntries: Bool = false,
         into itemsByCategory: inout [String: [StorageItem]],
         seenPaths: inout Set<String>
     ) async {
         let fm = FileManager.default
+        let listingOptions: FileManager.DirectoryEnumerationOptions = includeHiddenEntries ? [] : [.skipsHiddenFiles]
 
         for root in roots {
             if cancelled { return }
@@ -161,7 +164,7 @@ actor StorageScanner {
                 guard let contents = try? fm.contentsOfDirectory(
                     at: root.url,
                     includingPropertiesForKeys: [.isDirectoryKey],
-                    options: [.skipsHiddenFiles]
+                    options: listingOptions
                 ) else { continue }
 
                 if contents.isEmpty {

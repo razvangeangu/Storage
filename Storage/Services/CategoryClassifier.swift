@@ -21,11 +21,9 @@ enum CategoryClassifier {
         Rule(categoryID: "photos", name: "Photos", icon: "photo.fill", pathPrefixes: [
             homePrefix("Pictures/"),
         ]),
-        Rule(categoryID: "developer", name: "Developer", icon: "hammer.fill", pathPrefixes: [
-            homePrefix("Developer/"),
-            homePrefix("Library/Developer/"),
-            homePrefix("Library/Caches/com.apple.dt.Xcode/"),
-        ]),
+        Rule(categoryID: "developer", name: "Developer", icon: "hammer.fill", pathPrefixes:
+            KnownPaths.developerPathPrefixes
+        ),
         Rule(categoryID: "ios_backups", name: "iOS Backups", icon: "iphone", pathPrefixes: [
             homePrefix("Library/Application Support/MobileSync/"),
         ]),

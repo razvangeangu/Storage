@@ -87,7 +87,7 @@ final class StorageViewModel {
     }
 
     func toggleSelection(for item: StorageItem) {
-        guard item.isDeletable else { return }
+        guard !item.isLocked else { return }
         if selectedItemIDs.contains(item.id) {
             selectedItemIDs.remove(item.id)
         } else {
@@ -95,23 +95,17 @@ final class StorageViewModel {
         }
     }
 
-    func selectAllDeletable(in category: StorageCategory) {
-        for item in category.allItems where item.isDeletable {
-            selectedItemIDs.insert(item.id)
-        }
-    }
-
     func toggleCategorySelection(for category: StorageCategory) {
-        let deletable = category.allItems.filter(\.isDeletable)
-        guard !deletable.isEmpty else { return }
+        let selectable = category.allItems.filter { !$0.isLocked }
+        guard !selectable.isEmpty else { return }
 
-        let allSelected = deletable.allSatisfy { selectedItemIDs.contains($0.id) }
+        let allSelected = selectable.allSatisfy { selectedItemIDs.contains($0.id) }
         if allSelected {
-            for item in deletable {
+            for item in selectable {
                 selectedItemIDs.remove(item.id)
             }
         } else {
-            for item in deletable {
+            for item in selectable {
                 selectedItemIDs.insert(item.id)
             }
         }

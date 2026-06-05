@@ -5,7 +5,6 @@ struct CategoryTreeView: View {
     let totalBytes: Int64
     let selectedItemIDs: Set<String>
     let onToggle: (StorageItem) -> Void
-    let onSelectAllDeletable: (StorageCategory) -> Void
     let onToggleCategorySelection: (StorageCategory) -> Void
 
     @State private var expandedCategoryIDs: Set<String> = []
@@ -19,7 +18,6 @@ struct CategoryTreeView: View {
                     isExpanded: expansionBinding(for: category.id),
                     selectedItemIDs: selectedItemIDs,
                     onToggle: onToggle,
-                    onSelectAllDeletable: onSelectAllDeletable,
                     onToggleCategorySelection: onToggleCategorySelection,
                     expandedCategoryIDs: $expandedCategoryIDs
                 )
@@ -79,7 +77,6 @@ private struct CategorySection: View {
     @Binding var isExpanded: Bool
     let selectedItemIDs: Set<String>
     let onToggle: (StorageItem) -> Void
-    let onSelectAllDeletable: (StorageCategory) -> Void
     let onToggleCategorySelection: (StorageCategory) -> Void
     @Binding var expandedCategoryIDs: Set<String>
 
@@ -102,8 +99,7 @@ private struct CategorySection: View {
                 itemCount: itemCount,
                 isPartial: category.isPartial,
                 selectionState: selectionState(for: category),
-                onToggleSelection: { onToggleCategorySelection(category) },
-                onSelectAll: { onSelectAllDeletable(category) }
+                onToggleSelection: { onToggleCategorySelection(category) }
             )
 
             if isExpanded {
@@ -115,7 +111,6 @@ private struct CategorySection: View {
                             isExpanded: subExpansionBinding(for: sub.id),
                             selectedItemIDs: selectedItemIDs,
                             onToggle: onToggle,
-                            onSelectAllDeletable: onSelectAllDeletable,
                             onToggleCategorySelection: onToggleCategorySelection
                         )
                     }
@@ -147,11 +142,11 @@ private struct CategorySection: View {
     }
 
     private func selectionState(for category: StorageCategory) -> CheckboxState {
-        let deletable = category.allItems.filter(\.isDeletable)
-        guard !deletable.isEmpty else { return .unavailable }
-        let selected = deletable.filter { selectedItemIDs.contains($0.id) }.count
+        let selectable = category.allItems.filter { !$0.isLocked }
+        guard !selectable.isEmpty else { return .unavailable }
+        let selected = selectable.filter { selectedItemIDs.contains($0.id) }.count
         if selected == 0 { return .off }
-        if selected == deletable.count { return .on }
+        if selected == selectable.count { return .on }
         return .mixed
     }
 }
@@ -164,7 +159,6 @@ private struct SubcategorySection: View {
     @Binding var isExpanded: Bool
     let selectedItemIDs: Set<String>
     let onToggle: (StorageItem) -> Void
-    let onSelectAllDeletable: (StorageCategory) -> Void
     let onToggleCategorySelection: (StorageCategory) -> Void
 
     private var style: CategoryStyle.Appearance {
@@ -184,8 +178,7 @@ private struct SubcategorySection: View {
                 compact: true,
                 leadingIndent: TreeMetrics.childIndent,
                 selectionState: selectionState(for: category),
-                onToggleSelection: { onToggleCategorySelection(category) },
-                onSelectAll: { onSelectAllDeletable(category) }
+                onToggleSelection: { onToggleCategorySelection(category) }
             )
 
             if isExpanded {
@@ -202,11 +195,11 @@ private struct SubcategorySection: View {
     }
 
     private func selectionState(for category: StorageCategory) -> CheckboxState {
-        let deletable = category.allItems.filter(\.isDeletable)
-        guard !deletable.isEmpty else { return .unavailable }
-        let selected = deletable.filter { selectedItemIDs.contains($0.id) }.count
+        let selectable = category.allItems.filter { !$0.isLocked }
+        guard !selectable.isEmpty else { return .unavailable }
+        let selected = selectable.filter { selectedItemIDs.contains($0.id) }.count
         if selected == 0 { return .off }
-        if selected == deletable.count { return .on }
+        if selected == selectable.count { return .on }
         return .mixed
     }
 }
@@ -225,7 +218,6 @@ private struct CategoryHeaderRow: View {
     var leadingIndent: CGFloat = 0
     let selectionState: CheckboxState
     let onToggleSelection: () -> Void
-    let onSelectAll: () -> Void
 
     private var share: Double {
         guard totalBytes > 0 else { return 0 }
@@ -284,16 +276,6 @@ private struct CategoryHeaderRow: View {
             Text(ByteFormatting.string(for: size))
                 .font(compact ? .caption.monospacedDigit().weight(.medium) : .subheadline.monospacedDigit().weight(.semibold))
                 .foregroundStyle(style.color)
-
-            Menu {
-                Button("Select All Deletable") { onSelectAll() }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(compact ? .caption : .body)
-                    .foregroundStyle(.tertiary)
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
         }
         .frame(minHeight: TreeMetrics.rowHeight)
     }
@@ -373,20 +355,17 @@ private struct ItemRow: View {
 
             Spacer().frame(width: TreeMetrics.chevronWidth)
 
-            if item.isDeletable {
-                SelectionCheckbox(
-                    state: isSelected ? .on : .off,
-                    action: { onToggle(item) }
-                )
-            } else if item.isLocked {
+            if item.isLocked {
                 Image(systemName: "lock.fill")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .frame(width: TreeMetrics.checkboxWidth, height: TreeMetrics.checkboxWidth)
                     .help("System-owned — cannot delete without admin")
             } else {
-                Color.clear
-                    .frame(width: TreeMetrics.checkboxWidth, height: TreeMetrics.checkboxWidth)
+                SelectionCheckbox(
+                    state: isSelected ? .on : .off,
+                    action: { onToggle(item) }
+                )
             }
 
             Image(systemName: appearance.icon)
@@ -418,7 +397,7 @@ private struct ItemRow: View {
         .frame(minHeight: TreeMetrics.rowHeight)
         .contentShape(Rectangle())
         .onTapGesture {
-            if item.isDeletable {
+            if !item.isLocked {
                 onToggle(item)
             }
         }

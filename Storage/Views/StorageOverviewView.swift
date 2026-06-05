@@ -60,7 +60,6 @@ struct StorageOverviewView: View {
                 totalBytes: result.totalBytes,
                 selectedItemIDs: viewModel.selectedItemIDs,
                 onToggle: { viewModel.toggleSelection(for: $0) },
-                onSelectAllDeletable: { viewModel.selectAllDeletable(in: $0) },
                 onToggleCategorySelection: { viewModel.toggleCategorySelection(for: $0) }
             )
         } else if !viewModel.isScanning {

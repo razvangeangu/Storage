@@ -21,8 +21,26 @@ enum CategoryStyle {
         "photos": Appearance(icon: "photo.on.rectangle.angled", color: .pink),
         "developer": Appearance(icon: "hammer.fill", color: .purple),
         "developer_projects": Appearance(icon: "folder.fill", color: .purple),
-        "xcode_support": Appearance(icon: "chevron.left.forwardslash.chevron.right", color: .purple),
+        "xcode": Appearance(icon: "chevron.left.forwardslash.chevron.right", color: .purple),
         "xcode_caches": Appearance(icon: "clock.arrow.circlepath", color: .orange),
+        "android_sdk": Appearance(icon: "smartphone", color: .green),
+        "android_data": Appearance(icon: "smartphone", color: .green),
+        "gradle": Appearance(icon: "square.stack.3d.up.fill", color: .orange),
+        "npm": Appearance(icon: "shippingbox.fill", color: .red),
+        "pnpm": Appearance(icon: "square.grid.3x3.fill", color: .orange),
+        "pnpm_store": Appearance(icon: "square.grid.3x3.fill", color: .orange),
+        "yarn": Appearance(icon: "link.circle.fill", color: .blue),
+        "yarn_cache": Appearance(icon: "link.circle.fill", color: .blue),
+        "bun": Appearance(icon: "hare.fill", color: .yellow),
+        "expo": Appearance(icon: "atom", color: .purple),
+        "react_native": Appearance(icon: "rectangle.stack.fill", color: .cyan),
+        "nvm": Appearance(icon: "server.rack", color: .green),
+        "fnm": Appearance(icon: "server.rack", color: .green),
+        "flutter": Appearance(icon: "bird.fill", color: .cyan),
+        "cocoapods": Appearance(icon: "capsule.fill", color: .red),
+        "maven": Appearance(icon: "cube.fill", color: .brown),
+        "watchman": Appearance(icon: "eye.fill", color: .mint),
+        "node_gyp_cache": Appearance(icon: "wrench.and.screwdriver.fill", color: .gray),
         "ios_backups": Appearance(icon: "iphone.gen3", color: .teal),
         "mail": Appearance(icon: "envelope.fill", color: .cyan),
         "messages": Appearance(icon: "bubble.left.and.bubble.right.fill", color: .green),
@@ -38,7 +56,16 @@ enum CategoryStyle {
     ]
 
     nonisolated static func appearance(for categoryID: String) -> Appearance {
-        styles[categoryID] ?? styles["other"]!
+        if let style = styles[categoryID] {
+            return style
+        }
+        if categoryID.hasPrefix("android_studio") {
+            return Appearance(icon: "smartphone", color: .green)
+        }
+        if categoryID.hasPrefix("developer") || categoryID.hasPrefix("xcode") {
+            return styles["developer"]!
+        }
+        return styles["other"]!
     }
 
     nonisolated static func itemAppearance(for item: StorageItem) -> ItemAppearance {
@@ -65,6 +92,18 @@ enum CategoryStyle {
         }
         if item.path.hasSuffix("/Caches") || name == "Cache" || name == "Caches" {
             return ItemAppearance(icon: "clock.arrow.circlepath", color: .orange)
+        }
+        if item.path.contains("/.npm") || name == "npm" || name == "_cacache" {
+            return ItemAppearance(icon: "shippingbox.fill", color: .red)
+        }
+        if item.path.contains("/.gradle") || (name == "caches" && item.path.contains(".gradle")) {
+            return ItemAppearance(icon: "square.stack.3d.up.fill", color: .orange)
+        }
+        if item.path.contains("/.expo") {
+            return ItemAppearance(icon: "atom", color: .purple)
+        }
+        if item.path.contains("node_modules") {
+            return ItemAppearance(icon: "shippingbox.fill", color: .green)
         }
         if !name.contains(".") || name.hasPrefix(".") {
             return ItemAppearance(icon: "folder.fill", color: category.color)
