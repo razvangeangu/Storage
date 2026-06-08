@@ -17,8 +17,9 @@ actor StorageScanner {
     }
 
     private func runScan(continuation: AsyncStream<ScanProgress>.Continuation) async {
+        let includeAppData = AppSettings.includeAppDataInScan
         let partialCategoryIDs = Self.partialCategoryIDs(
-            from: KnownPaths.inaccessibleScanRoots()
+            from: KnownPaths.inaccessibleScanRoots(includeAppData: includeAppData)
         )
         continuation.yield(.started)
 
@@ -28,7 +29,7 @@ actor StorageScanner {
             return
         }
 
-        let plan = await buildScanPlan()
+        let plan = await buildScanPlan(includeAppData: includeAppData)
         if cancelled {
             continuation.finish()
             return
@@ -104,14 +105,14 @@ actor StorageScanner {
         let entries: [URL]
     }
 
-    private func buildScanPlan() async -> ScanPlan {
+    private func buildScanPlan(includeAppData: Bool) async -> ScanPlan {
         async let appBundles = findAllAppBundles()
         async let documentEntries = listEntries(
             for: KnownPaths.documentDirectoryRoots,
             includeHiddenEntries: false
         )
         async let developerEntries = listDeveloperEntries()
-        async let libraryEntries = listLibraryEntries()
+        async let libraryEntries = listLibraryEntries(includeAppData: includeAppData)
         async let homeEntries = listHomeTopLevelEntries()
 
         var uniquePaths = Set<String>()
@@ -227,8 +228,8 @@ actor StorageScanner {
         }
     }
 
-    private func listLibraryEntries() async -> [URL] {
-        let roots = KnownPaths.accessibleScanRoots()
+    private func listLibraryEntries(includeAppData: Bool) async -> [URL] {
+        let roots = KnownPaths.accessibleScanRoots(includeAppData: includeAppData)
         return await withTaskGroup(of: [URL].self) { group in
             for root in roots {
                 group.addTask(priority: .utility) {

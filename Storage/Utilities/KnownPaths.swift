@@ -174,22 +174,32 @@ enum KnownPaths {
         }
     }
 
-    /// Shallow library and media folders — avoids walking the entire home directory tree.
-    nonisolated static var libraryScanRoots: [URL] {
+    /// Library folders that trigger per-app "access data from other apps" prompts when scanned.
+    nonisolated static var tccSensitiveLibraryScanRoots: [URL] {
         let library = home.appendingPathComponent("Library", isDirectory: true)
-        let candidates = [
+        return [
             library.appendingPathComponent("Application Support", isDirectory: true),
-            library.appendingPathComponent("Caches", isDirectory: true),
             library.appendingPathComponent("Containers", isDirectory: true),
             library.appendingPathComponent("Group Containers", isDirectory: true),
             library.appendingPathComponent("Mail", isDirectory: true),
             library.appendingPathComponent("Messages", isDirectory: true),
+        ]
+    }
+
+    /// Shallow library and media folders — avoids walking the entire home directory tree.
+    nonisolated static func libraryScanRoots(includeAppData: Bool) -> [URL] {
+        let library = home.appendingPathComponent("Library", isDirectory: true)
+        var candidates = [
+            library.appendingPathComponent("Caches", isDirectory: true),
             library.appendingPathComponent("Logs", isDirectory: true),
             home.appendingPathComponent("Movies", isDirectory: true),
             home.appendingPathComponent("Music", isDirectory: true),
             home.appendingPathComponent("Pictures", isDirectory: true),
             home.appendingPathComponent(".Trash", isDirectory: true),
         ]
+        if includeAppData {
+            candidates.insert(contentsOf: tccSensitiveLibraryScanRoots, at: 0)
+        }
         let fm = FileManager.default
         return candidates.filter { fm.fileExists(atPath: $0.path) }
     }
@@ -201,19 +211,25 @@ enum KnownPaths {
         ]
     }
 
-    nonisolated static var allScanRootCandidates: [URL] {
-        libraryScanRoots + extendedSystemScanRoots
+    nonisolated static func allScanRootCandidates(includeAppData: Bool) -> [URL] {
+        libraryScanRoots(includeAppData: includeAppData) + extendedSystemScanRoots
     }
 
     /// Roots the app can read right now — skips macOS-protected folders the current user cannot access.
-    nonisolated static func accessibleScanRoots() -> [URL] {
-        allScanRootCandidates.filter { PermissionService.canAccess(path: $0.path) }
+    nonisolated static func accessibleScanRoots(includeAppData: Bool) -> [URL] {
+        allScanRootCandidates(includeAppData: includeAppData)
+            .filter { PermissionService.canAccess(path: $0.path) }
     }
 
-    nonisolated static func inaccessibleScanRoots() -> [URL] {
-        allScanRootCandidates.filter {
-            FileManager.default.fileExists(atPath: $0.path) && !PermissionService.canAccess(path: $0.path)
+    nonisolated static func inaccessibleScanRoots(includeAppData: Bool) -> [URL] {
+        let fm = FileManager.default
+        var roots = allScanRootCandidates(includeAppData: includeAppData).filter {
+            fm.fileExists(atPath: $0.path) && !PermissionService.canAccess(path: $0.path)
         }
+        if !includeAppData {
+            roots.append(contentsOf: tccSensitiveLibraryScanRoots.filter { fm.fileExists(atPath: $0.path) })
+        }
+        return roots
     }
 
     nonisolated static let cleanupWhitelistPrefixes: [String] = [
