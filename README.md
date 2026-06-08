@@ -28,6 +28,16 @@ xcodebuild -scheme Storage -configuration Debug build
 ./Scripts/release-macos.sh 1.0.0
 ```
 
+## Terminal scan (no GUI)
+
+If Terminal.app has **Full Disk Access** (System Settings → Privacy & Security), this script mirrors the app’s scan from the command line — useful on locked-down Macs where the GUI app hits privacy prompts:
+
+```bash
+./Scripts/scan-storage.sh           # full scan (Containers, Application Support, …)
+./Scripts/scan-storage.sh --safe      # skip TCC-sensitive folders (app default)
+./Scripts/scan-storage.sh --top 30    # show more largest items
+```
+
 ## Requirements
 
 - macOS 15 or later
