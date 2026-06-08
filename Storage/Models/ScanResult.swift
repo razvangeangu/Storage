@@ -6,7 +6,6 @@ struct ScanResult: Codable, Sendable {
     let totalBytes: Int64
     let availableBytes: Int64
     let categories: [StorageCategory]
-    let hasFullDiskAccess: Bool
     let hiddenBytes: Int64
 
     var usedBytes: Int64 { totalBytes - availableBytes }

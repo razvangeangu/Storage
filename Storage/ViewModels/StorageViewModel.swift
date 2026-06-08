@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import Observation
 
@@ -13,7 +12,6 @@ final class StorageViewModel {
     var scanCurrentPath = ""
     var scanPathFeed: [ScanPathEntry] = []
     var scanItemsChecked = 0
-    var hasFullDiskAccess = false
 
     private var lastRecordedPath = ""
     private var lastFeedUpdate = Date.distantPast
@@ -98,7 +96,6 @@ final class StorageViewModel {
     }
 
     func onAppear() {
-        hasFullDiskAccess = PermissionService.hasFullDiskAccess()
         if AppSettings.showCachedResultsOnLaunch,
            let cached = ScanCacheStore.load() {
             scanResult = cached
@@ -113,14 +110,6 @@ final class StorageViewModel {
         ScanCacheStore.clear()
         scanResult = nil
         scanStatusText = "Ready to scan"
-    }
-
-    func refreshPermissions() {
-        hasFullDiskAccess = PermissionService.hasFullDiskAccess()
-    }
-
-    func handleAppDidBecomeActive() {
-        refreshPermissions()
     }
 
     func rescan() {
@@ -138,7 +127,6 @@ final class StorageViewModel {
             lastFeedUpdate = .distantPast
             selectedItemIDs.removeAll()
             resetBrowser()
-            hasFullDiskAccess = PermissionService.hasFullDiskAccess()
 
             let stream = await scanner.scan()
             for await progress in stream {
@@ -367,14 +355,6 @@ final class StorageViewModel {
 
         showCleanupConfirmation = false
         rescan()
-    }
-
-    func openFullDiskAccessSettings() {
-        for url in PermissionService.fullDiskAccessSettingsURLs() {
-            if NSWorkspace.shared.open(url) {
-                return
-            }
-        }
     }
 
     private static func formatDate(_ date: Date) -> String {

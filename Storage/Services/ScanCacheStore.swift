@@ -2,7 +2,7 @@ import Foundation
 
 enum ScanCacheStore {
     /// Bump when scan output shape or permission model changes so old caches are ignored.
-    static let schemaVersion = 3
+    static let schemaVersion = 4
 
     static var cacheFileURL: URL {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!

@@ -23,9 +23,6 @@ struct StorageOverviewView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .clipped()
         .onAppear { viewModel.onAppear() }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            viewModel.handleAppDidBecomeActive()
-        }
         .sheet(isPresented: $viewModel.showCleanupConfirmation) {
             CleanupConfirmationSheet(
                 items: viewModel.selectedItems,
@@ -46,7 +43,6 @@ struct StorageOverviewView: View {
         .toolbar {
             ToolbarItemGroup(placement: .automatic) {
                 Button {
-                    viewModel.refreshPermissions()
                     viewModel.rescan()
                 } label: {
                     Label("Scan", systemImage: "arrow.clockwise")

@@ -17,7 +17,6 @@ actor StorageScanner {
     }
 
     private func runScan(continuation: AsyncStream<ScanProgress>.Continuation) async {
-        let hasFullDiskAccess = PermissionService.hasFullDiskAccess()
         let partialCategoryIDs = Self.partialCategoryIDs(
             from: KnownPaths.inaccessibleScanRoots()
         )
@@ -91,7 +90,6 @@ actor StorageScanner {
                 let ri = CategoryClassifier.categoryOrder.firstIndex(of: rhs.id) ?? 999
                 return li < ri
             },
-            hasFullDiskAccess: hasFullDiskAccess,
             hiddenBytes: hidden
         )
 
@@ -114,6 +112,7 @@ actor StorageScanner {
         )
         async let developerEntries = listDeveloperEntries()
         async let libraryEntries = listLibraryEntries()
+        async let homeEntries = listHomeTopLevelEntries()
 
         var uniquePaths = Set<String>()
         var entries: [URL] = []
@@ -130,6 +129,7 @@ actor StorageScanner {
         appendUnique(await documentEntries)
         appendUnique(await developerEntries)
         appendUnique(await libraryEntries)
+        appendUnique(await homeEntries)
 
         let deduped = Self.dropNestedPaths(entries)
         return ScanPlan(entries: deduped)
@@ -202,6 +202,28 @@ actor StorageScanner {
                 entries.append(contentsOf: found)
             }
             return entries
+        }
+    }
+
+    private func listHomeTopLevelEntries() async -> [URL] {
+        let home = KnownPaths.home
+        guard PermissionService.canAccess(path: home.path) else { return [] }
+
+        let skipNames: Set<String> = [
+            "Library", "Documents", "Desktop", "Downloads", "Developer",
+            "Movies", "Music", "Pictures", "Applications",
+        ]
+
+        let fm = FileManager.default
+        guard let contents = try? fm.contentsOfDirectory(
+            at: home,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+
+        return contents.filter { url in
+            guard !skipNames.contains(url.lastPathComponent) else { return false }
+            return PermissionService.canAccess(path: url.path)
         }
     }
 

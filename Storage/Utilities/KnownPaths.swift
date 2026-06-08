@@ -205,7 +205,7 @@ enum KnownPaths {
         libraryScanRoots + extendedSystemScanRoots
     }
 
-    /// Roots the app can read right now — skips macOS-protected folders instead of requiring Full Disk Access up front.
+    /// Roots the app can read right now — skips macOS-protected folders the current user cannot access.
     nonisolated static func accessibleScanRoots() -> [URL] {
         allScanRootCandidates.filter { PermissionService.canAccess(path: $0.path) }
     }
