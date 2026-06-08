@@ -36,6 +36,10 @@ If Terminal.app has **Full Disk Access** (System Settings → Privacy & Security
 ./Scripts/scan-storage.sh           # full scan (Containers, Application Support, …)
 ./Scripts/scan-storage.sh --safe      # skip TCC-sensitive folders (app default)
 ./Scripts/scan-storage.sh --top 30    # show more largest items
+
+# Drill into a path from the "Top" list (copy the expand: line, or run manually):
+./Scripts/scan-storage.sh --path ~/Developer/others --level 1   # immediate children
+./Scripts/scan-storage.sh --path ~/Developer/others --level 3   # down to 3 folder levels
 ```
 
 ## Requirements
